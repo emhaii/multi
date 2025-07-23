@@ -423,8 +423,13 @@
             createTouchIndicator(touchId, x, y) {
                 const indicator = document.createElement('div');
                 indicator.className = 'touch-indicator';
+                // Ensure proper positioning relative to game area
+                indicator.style.position = 'absolute';
                 indicator.style.left = x + 'px';
                 indicator.style.top = y + 'px';
+                indicator.style.transform = 'translate(-50%, -50%)';
+                indicator.style.pointerEvents = 'none';
+                indicator.style.zIndex = '999';
                 this.gameArea.appendChild(indicator);
                 this.touchIndicators.set(touchId, indicator);
             }
