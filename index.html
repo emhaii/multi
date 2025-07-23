@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Drag & Drop Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            text-align: center;
+            color: white;
+        }
+
+        .game-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 3px dashed rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .drop-zone.drag-over {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+
+        .draggable {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 15px;
+            cursor: grab;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 24px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            touch-action: none;
+            z-index: 10;
+        }
+
+        .draggable:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .draggable.dragging {
+            cursor: grabbing;
+            transform: scale(1.1);
+            z-index: 1000;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+        }
+
+        .color-red { background: linear-gradient(135deg, #ff6b6b, #ee5a52); }
+        .color-blue { background: linear-gradient(135deg, #4ecdc4, #44a08d); }
+        .color-green { background: linear-gradient(135deg, #a8e6cf, #7fcdcd); }
+        .color-yellow { background: linear-gradient(135deg, #ffd93d, #ff9f43); }
+        .color-purple { background: linear-gradient(135deg, #a8a8ff, #8e8eff); }
+        .color-orange { background: linear-gradient(135deg, #ff9a56, #ff6b35); }
+
+        .score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+        }
+
+        .active-touches {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 15px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .touch-indicator {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 999;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+        }
+
+        .celebration {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: #4CAF50;
+            font-weight: bold;
+            opacity: 0;
+            z-index: 2000;
+            pointer-events: none;
+        }
+
+        .celebration.show {
+            animation: celebrate 2s ease-out;
+        }
+
+        @keyframes celebrate {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>🎯 Multiplayer Drag & Drop Challenge</h1>
+            <p>Drag the colorful pieces into the target zone! Multiple players can play simultaneously</p>
+        </div>
+        
+        <div class="game-area" id="gameArea">
+            <div class="drop-zone" id="dropZone">
+                Drop pieces here!
+            </div>
+            
+            <div class="score" id="score">Score: 0</div>
+            <div class="active-touches" id="activeTouches">Active touches: 0</div>
+            
+            <div class="celebration" id="celebration">🎉 Great Job! 🎉</div>
+        </div>
+    </div>
+
+    <script>
+        class MultiTouchDragDropGame {
+            constructor() {
+                this.gameArea = document.getElementById('gameArea');
+                this.dropZone = document.getElementById('dropZone');
+                this.scoreElement = document.getElementById('score');
+                this.activeTouchesElement = document.getElementById('activeTouches');
+                this.celebrationElement = document.getElementById('celebration');
+                
+                this.score = 0;
+                this.activeTouches = new Map();
+                this.touchIndicators = new Map();
+                this.draggedElements = new Map();
+                this.pieces = [];
+                
+                this.colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
+                this.numbers = ['1', '2', '3', '4', '5', '6'];
+                
+                this.init();
+                this.setupEventListeners();
+                this.spawnPieces();
+            }
+            
+            init() {
+                // Prevent default touch behaviors
+                this.gameArea.style.touchAction = 'none';
+                document.body.style.touchAction = 'none';
+            }
+            
+            setupEventListeners() {
+                // Touch events
+                this.gameArea.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
+                this.gameArea.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
+                this.gameArea.addEventListener('touchend', this.handleTouchEnd.bind(this), { passive: false });
+                this.gameArea.addEventListener('touchcancel', this.handleTouchEnd.bind(this), { passive: false });
+                
+                // Mouse events for desktop support
+                this.gameArea.addEventListener('mousedown', this.handleMouseDown.bind(this));
+                this.gameArea.addEventListener('mousemove', this.handleMouseMove.bind(this));
+                this.gameArea.addEventListener('mouseup', this.handleMouseUp.bind(this));
+                
+                // Prevent context menu and default drag
+                this.gameArea.addEventListener('contextmenu', e => e.preventDefault());
+                this.gameArea.addEventListener('dragstart', e => e.preventDefault());
+            }
+            
+            handleTouchStart(e) {
+                e.preventDefault();
+                
+                for (let touch of e.changedTouches) {
+                    // Track this touch as active
+                    this.activeTouches.set(touch.identifier, {
+                        x: touch.clientX,
+                        y: touch.clientY
+                    });
+                    
+                    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const draggable = this.findDraggableElement(element);
+                    
+                    if (draggable) {
+                        this.startDrag(touch.identifier, draggable, touch.clientX, touch.clientY);
+                    }
+                    
+                    this.createTouchIndicator(touch.identifier, touch.clientX, touch.clientY);
+                }
+                
+                this.updateActiveTouches();
+            }
+            
+            handleTouchMove(e) {
+                e.preventDefault();
+                
+                for (let touch of e.changedTouches) {
+                    // Update active touch position
+                    if (this.activeTouches.has(touch.identifier)) {
+                        this.activeTouches.set(touch.identifier, {
+                            x: touch.clientX,
+                            y: touch.clientY
+                        });
+                    }
+                    
+                    this.updateDrag(touch.identifier, touch.clientX, touch.clientY);
+                    this.updateTouchIndicator(touch.identifier, touch.clientX, touch.clientY);
+                }
+            }
+            
+            handleTouchEnd(e) {
+                e.preventDefault();
+                
+                for (let touch of e.changedTouches) {
+                    // Remove from active touches
+                    this.activeTouches.delete(touch.identifier);
+                    
+                    this.endDrag(touch.identifier, touch.clientX, touch.clientY);
+                    this.removeTouchIndicator(touch.identifier);
+                }
+                
+                this.updateActiveTouches();
+            }
+            
+            handleMouseDown(e) {
+                const draggable = this.findDraggableElement(e.target);
+                if (draggable) {
+                    this.startDrag('mouse', draggable, e.clientX, e.clientY);
+                }
+            }
+            
+            handleMouseMove(e) {
+                if (this.draggedElements.has('mouse')) {
+                    this.updateDrag('mouse', e.clientX, e.clientY);
+                }
+            }
+            
+            handleMouseUp(e) {
+                if (this.draggedElements.has('mouse')) {
+                    this.endDrag('mouse', e.clientX, e.clientY);
+                }
+            }
+            
+            findDraggableElement(element) {
+                while (element && !element.classList.contains('draggable')) {
+                    element = element.parentElement;
+                }
+                return element && element.classList.contains('draggable') ? element : null;
+            }
+            
+            startDrag(touchId, element, clientX, clientY) {
+                const rect = element.getBoundingClientRect();
+                const parentRect = this.gameArea.getBoundingClientRect();
+                
+                const offsetX = clientX - rect.left;
+                const offsetY = clientY - rect.top;
+                
+                element.classList.add('dragging');
+                element.style.zIndex = '1000';
+                
+                this.draggedElements.set(touchId, {
+                    element: element,
+                    offsetX: offsetX,
+                    offsetY: offsetY,
+                    startX: rect.left - parentRect.left,
+                    startY: rect.top - parentRect.top
+                });
+            }
+            
+            updateDrag(touchId, clientX, clientY) {
+                const dragData = this.draggedElements.get(touchId);
+                if (!dragData) return;
+                
+                const parentRect = this.gameArea.getBoundingClientRect();
+                const newX = clientX - parentRect.left - dragData.offsetX;
+                const newY = clientY - parentRect.top - dragData.offsetY;
+                
+                // Keep element within bounds
+                const maxX = parentRect.width - dragData.element.offsetWidth;
+                const maxY = parentRect.height - dragData.element.offsetHeight;
+                
+                const clampedX = Math.max(0, Math.min(newX, maxX));
+                const clampedY = Math.max(0, Math.min(newY, maxY));
+                
+                dragData.element.style.left = clampedX + 'px';
+                dragData.element.style.top = clampedY + 'px';
+                
+                // Check drop zone collision
+                this.checkDropZoneCollision(dragData.element);
+            }
+            
+            endDrag(touchId, clientX, clientY) {
+                const dragData = this.draggedElements.get(touchId);
+                if (!dragData) return;
+                
+                const element = dragData.element;
+                element.classList.remove('dragging');
+                element.style.zIndex = '10';
+                
+                // Check if dropped in drop zone
+                if (this.isInDropZone(element)) {
+                    this.handleSuccessfulDrop(element);
+                }
+                
+                this.draggedElements.delete(touchId);
+                this.dropZone.classList.remove('drag-over');
+            }
+            
+            checkDropZoneCollision(element) {
+                if (this.isInDropZone(element)) {
+                    this.dropZone.classList.add('drag-over');
+                } else {
+                    this.dropZone.classList.remove('drag-over');
+                }
+            }
+            
+            isInDropZone(element) {
+                const elementRect = element.getBoundingClientRect();
+                const dropZoneRect = this.dropZone.getBoundingClientRect();
+                
+                const elementCenterX = elementRect.left + elementRect.width / 2;
+                const elementCenterY = elementRect.top + elementRect.height / 2;
+                
+                return elementCenterX >= dropZoneRect.left &&
+                       elementCenterX <= dropZoneRect.right &&
+                       elementCenterY >= dropZoneRect.top &&
+                       elementCenterY <= dropZoneRect.bottom;
+            }
+            
+            handleSuccessfulDrop(element) {
+                this.score += 10;
+                this.updateScore();
+                this.showCelebration();
+                
+                // Remove the element and spawn a new one
+                element.remove();
+                this.pieces = this.pieces.filter(p => p !== element);
+                
+                setTimeout(() => {
+                    this.spawnNewPiece();
+                }, 500);
+            }
+            
+            createTouchIndicator(touchId, x, y) {
+                const indicator = document.createElement('div');
+                indicator.className = 'touch-indicator';
+                indicator.style.left = x + 'px';
+                indicator.style.top = y + 'px';
+                this.gameArea.appendChild(indicator);
+                this.touchIndicators.set(touchId, indicator);
+            }
+            
+            updateTouchIndicator(touchId, x, y) {
+                const indicator = this.touchIndicators.get(touchId);
+                if (indicator) {
+                    indicator.style.left = x + 'px';
+                    indicator.style.top = y + 'px';
+                }
+            }
+            
+            removeTouchIndicator(touchId) {
+                const indicator = this.touchIndicators.get(touchId);
+                if (indicator) {
+                    indicator.remove();
+                    this.touchIndicators.delete(touchId);
+                }
+            }
+            
+            updateActiveTouches() {
+                this.activeTouchesElement.textContent = `Active touches: ${this.touchIndicators.size}`;
+            }
+            
+            updateScore() {
+                this.scoreElement.textContent = `Score: ${this.score}`;
+            }
+            
+            showCelebration() {
+                this.celebrationElement.classList.add('show');
+                setTimeout(() => {
+                    this.celebrationElement.classList.remove('show');
+                }, 2000);
+            }
+            
+            spawnPieces() {
+                for (let i = 0; i < 6; i++) {
+                    this.spawnNewPiece();
+                }
+            }
+            
+            spawnNewPiece() {
+                const piece = document.createElement('div');
+                piece.className = `draggable color-${this.colors[Math.floor(Math.random() * this.colors.length)]}`;
+                piece.textContent = this.numbers[Math.floor(Math.random() * this.numbers.length)];
+                
+                // Random position
+                const maxX = this.gameArea.offsetWidth - 80;
+                const maxY = this.gameArea.offsetHeight - 80;
+                
+                let x, y;
+                do {
+                    x = Math.random() * maxX;
+                    y = Math.random() * maxY;
+                } while (this.isPositionInDropZone(x, y));
+                
+                piece.style.left = x + 'px';
+                piece.style.top = y + 'px';
+                
+                this.gameArea.appendChild(piece);
+                this.pieces.push(piece);
+                
+                // Entrance animation
+                piece.style.transform = 'scale(0)';
+                requestAnimationFrame(() => {
+                    piece.style.transition = 'transform 0.3s ease';
+                    piece.style.transform = 'scale(1)';
+                });
+            }
+            
+            isPositionInDropZone(x, y) {
+                const dropZoneRect = this.dropZone.getBoundingClientRect();
+                const gameAreaRect = this.gameArea.getBoundingClientRect();
+                
+                const dropZoneX = dropZoneRect.left - gameAreaRect.left;
+                const dropZoneY = dropZoneRect.top - gameAreaRect.top;
+                
+                return x < dropZoneX + dropZoneRect.width + 20 &&
+                       x + 80 > dropZoneX - 20 &&
+                       y < dropZoneY + dropZoneRect.height + 20 &&
+                       y + 80 > dropZoneY - 20;
+            }
+        }
+        
+        // Initialize the game when the page loads
+        window.addEventListener('load', () => {
+            new MultiTouchDragDropGame();
+        });
+    </script>
+</body>
+</html>
