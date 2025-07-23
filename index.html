@@ -235,14 +235,24 @@
                 this.gameArea.addEventListener('dragstart', e => e.preventDefault());
             }
             
+            getRelativeCoordinates(clientX, clientY) {
+                const gameAreaRect = this.gameArea.getBoundingClientRect();
+                return {
+                    x: clientX - gameAreaRect.left,
+                    y: clientY - gameAreaRect.top
+                };
+            }
+            
             handleTouchStart(e) {
                 e.preventDefault();
                 
                 for (let touch of e.changedTouches) {
+                    const relativeCoords = this.getRelativeCoordinates(touch.clientX, touch.clientY);
+                    
                     // Track this touch as active
                     this.activeTouches.set(touch.identifier, {
-                        x: touch.clientX,
-                        y: touch.clientY
+                        x: relativeCoords.x,
+                        y: relativeCoords.y
                     });
                     
                     const element = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -252,7 +262,7 @@
                         this.startDrag(touch.identifier, draggable, touch.clientX, touch.clientY);
                     }
                     
-                    this.createTouchIndicator(touch.identifier, touch.clientX, touch.clientY);
+                    this.createTouchIndicator(touch.identifier, relativeCoords.x, relativeCoords.y);
                 }
                 
                 this.updateActiveTouches();
@@ -262,16 +272,18 @@
                 e.preventDefault();
                 
                 for (let touch of e.changedTouches) {
+                    const relativeCoords = this.getRelativeCoordinates(touch.clientX, touch.clientY);
+                    
                     // Update active touch position
                     if (this.activeTouches.has(touch.identifier)) {
                         this.activeTouches.set(touch.identifier, {
-                            x: touch.clientX,
-                            y: touch.clientY
+                            x: relativeCoords.x,
+                            y: relativeCoords.y
                         });
                     }
                     
                     this.updateDrag(touch.identifier, touch.clientX, touch.clientY);
-                    this.updateTouchIndicator(touch.identifier, touch.clientX, touch.clientY);
+                    this.updateTouchIndicator(touch.identifier, relativeCoords.x, relativeCoords.y);
                 }
             }
             
